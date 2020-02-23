@@ -22,14 +22,14 @@ struct MicrocodeInfo {
 
 	static void printHeader()
 	{
-		printf(" Offset |  Size  | CPUID | Pf | Rev\n");
-		printf("--------+--------+-------+----+----\n");
+		printf(" CPUID | Pf | Rev | Offset  | Size\n");
+		printf("-------+----+-----+---------+--------\n");
 	}
 
 	void dump()
 	{
-		printf("0x%05lX - 0x%04X | %5X | %02X | %3X\n",
-			pos, size, cpuid, platform, revision);
+		printf(" %5X | %02X | %3X | 0x%05lX | 0x%04X\n",
+			cpuid, platform, revision, pos, size);
 	}
 };
 
@@ -79,6 +79,7 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 	if (info->size == 0)
 		info->size = 0x800; // Default?
 
+	file->seekg(pos);
 	return true;
 }
 
@@ -102,8 +103,8 @@ int scanFile(const std::string &filename, int64_t pos)
 
 		if (peek == 0x01 && readMicrocode(&romfile, &info)) {
 			if (pos != last_pos) {
-				printf("Unknown region: 0x%lX bytes from 0x%lX to 0x%lX\n",
-					 pos - last_pos, last_pos, pos - 1);
+				printf("\tUnknown region: 0x%lX to 0x%lX (0x%lX bytes)\n",
+					pos - 1, last_pos, pos - last_pos);
 			}
 			info.dump();
 			pos += (int64_t)info.size;
@@ -136,6 +137,7 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos
 	CHECK(readMicrocode(&romfile, &old_uc), "ROM: No microcode at pos 0x" << romfile.tellg());
 	CHECK(readMicrocode(&binfile, &new_uc), "BIN: No microcode at pos 0x" << binfile.tellg());
 	CHECK(bin_size == new_uc.size, "BIN: Invalid file length");
+	CHECK(romfile.tellg() == rompos, "Sanity check failed");
 	LOG("Old vs new microcode:");
 	old_uc.printHeader();
 	old_uc.dump();
