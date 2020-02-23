@@ -1,0 +1,11 @@
+# Development files and paths
+bin/
+CMakeFiles/
+*.cmake
+CMakeCache.txt
+Makefile
+iMicroUpdate
+
+# IDE files
+*.kdev4
+.kdev/
