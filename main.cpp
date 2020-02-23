@@ -46,8 +46,6 @@ uint16_t read2Bytes(std::istream *file)
 bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 {
 	int64_t pos = file->tellg();
-	if ((pos & 0x0FL) != 0)
-		return false; // Aligned à 16 bytes
 
 	char buffer[0x18];
 	file->read(buffer, 0x18);
@@ -85,8 +83,6 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 
 int scanFile(const std::string &filename, int64_t pos)
 {
-	const int64_t STEPSIZE_NORMAL = 0x10;
-
 	std::ifstream romfile(filename, std::ios_base::binary | std::ios_base::ate);
 	CHECK(romfile.is_open(), "ROM: File not found");
 
@@ -104,13 +100,14 @@ int scanFile(const std::string &filename, int64_t pos)
 		if (peek == 0x01 && readMicrocode(&romfile, &info)) {
 			if (pos != last_pos) {
 				printf("\tUnknown region: 0x%lX to 0x%lX (0x%lX bytes)\n",
-					pos - 1, last_pos, pos - last_pos);
+					last_pos, pos - 1, pos - last_pos);
 			}
 			info.dump();
 			pos += (int64_t)info.size;
 			last_pos = pos;
 		} else {
-			pos += STEPSIZE_NORMAL;
+			// Speed optimization
+			pos += last_pos > 0 ? 0x100 : 0x04;
 		}
 	}
 	return 0;
@@ -119,8 +116,8 @@ int scanFile(const std::string &filename, int64_t pos)
 int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos)
 {
 	std::cout << std::hex;
-	LOG("\tROM file:   " << rompath << " @ 0x" << rompos);
-	LOG("\tMicrocode:  " << binpath << " @ 0x" << binpos);
+	LOG("\tROM file:   " << rompath);
+	LOG("\tMicrocode:  " << binpath);
 
 	// Open and check files
 	std::fstream romfile(rompath,
@@ -136,9 +133,10 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos
 	MicrocodeInfo old_uc, new_uc;
 	CHECK(readMicrocode(&romfile, &old_uc), "ROM: No microcode at pos 0x" << romfile.tellg());
 	CHECK(readMicrocode(&binfile, &new_uc), "BIN: No microcode at pos 0x" << binfile.tellg());
-	CHECK(bin_size == new_uc.size, "BIN: Invalid file length");
+	CHECK(bin_size - binpos >= new_uc.size, "BIN: Invalid file length");
 	CHECK(romfile.tellg() == rompos, "Sanity check failed");
-	LOG("Old vs new microcode:");
+
+	LOG("\nOld vs new microcode:");
 	old_uc.printHeader();
 	old_uc.dump();
 	new_uc.dump();
