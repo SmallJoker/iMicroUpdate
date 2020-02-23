@@ -50,7 +50,7 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 		return false; // Aligned à 16 bytes
 
 	char buffer[0x18];
-    file->read(buffer, 0x18);
+	file->read(buffer, 0x18);
 	file->seekg(pos);
 
 	if (!(buffer[0x00] == 0x01
@@ -85,7 +85,6 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 int scanFile(const std::string &filename, int64_t pos)
 {
 	const int64_t STEPSIZE_NORMAL = 0x10;
-	const int64_t STEPSIZE_MICROCODE = 0x10;
 
 	std::ifstream romfile(filename, std::ios_base::binary | std::ios_base::ate);
 	CHECK(romfile.is_open(), "ROM: File not found");
@@ -93,6 +92,7 @@ int scanFile(const std::string &filename, int64_t pos)
 	int64_t bin_size = romfile.tellg();
 	char peek;
 	MicrocodeInfo info;
+	int64_t last_pos = 0;
 
 	info.printHeader();
 	while (pos < bin_size) {
@@ -101,8 +101,13 @@ int scanFile(const std::string &filename, int64_t pos)
 		romfile.unget();
 
 		if (peek == 0x01 && readMicrocode(&romfile, &info)) {
+			if (pos != last_pos) {
+				printf("Unknown region: 0x%lX bytes from 0x%lX to 0x%lX\n",
+					 pos - last_pos, last_pos, pos - 1);
+			}
 			info.dump();
-			pos += std::max((int64_t)info.size, STEPSIZE_MICROCODE);
+			pos += (int64_t)info.size;
+			last_pos = pos;
 		} else {
 			pos += STEPSIZE_NORMAL;
 		}
