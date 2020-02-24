@@ -113,7 +113,8 @@ int scanFile(const std::string &filename, int64_t pos)
 	return 0;
 }
 
-int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos)
+int patchFile(CONSTSTR rompath, CONSTSTR binpath,
+	int64_t rompos, int64_t binpos, bool force)
 {
 	std::cout << std::hex;
 	LOG("\tROM file:   " << rompath);
@@ -130,15 +131,24 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos
 	auto bin_size = binfile.tellg();
 	romfile.seekg(rompos);
 	binfile.seekg(binpos);
+
+	// Read and check microcodes
 	MicrocodeInfo old_uc, new_uc;
-	CHECK(readMicrocode(&romfile, &old_uc), "ROM: No microcode at pos 0x" << romfile.tellg());
+	bool microcode_ok = readMicrocode(&romfile, &old_uc);
+	CHECK(microcode_ok || force, "ROM: No microcode at pos 0x" << romfile.tellg());
 	CHECK(readMicrocode(&binfile, &new_uc), "BIN: No microcode at pos 0x" << binfile.tellg());
+
+	// Verify data lengths
 	CHECK(bin_size - binpos >= new_uc.size, "BIN: Invalid file length");
 	CHECK(romfile.tellg() == rompos, "Sanity check failed");
 
 	LOG("\nOld vs new microcode:");
 	old_uc.printHeader();
-	old_uc.dump();
+	if (microcode_ok)
+		old_uc.dump();
+	else
+		LOG("  -- NONE OR INVALID MICROCODE --");
+
 	new_uc.dump();
 	LOG("Please ENTER to confirm.");
 	getchar();
@@ -157,12 +167,13 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath, int64_t rompos, int64_t binpos
 
 int main(int argc, char **argv)
 {
-	LOG("iMicroUpdate - Microcode updater for Intel BIOSes");
-	LOG("  Patch: -patch ROMFILE -bin MICROCODE -posp 0 [-posb 0]");
+	LOG("iMicroUpdate - Updater tool for Intel CPU microcode in BIOSes");
+	LOG("  Patch: -patch ROMFILE -bin MICROCODE -posp 0 [-posb 0] [-force]");
 	CLIArgStr ca_romfile("patch", "ROMFILE.ROM");
 	CLIArgStr ca_binfile("bin", "MICROCODE.BIN");
 	CLIArgS64 ca_rompos("posp", 0);
 	CLIArgS64 ca_binpos("posb", 0);
+	CLIArgFlag ca_force("force");
 
 	LOG("  Scan:  -scan FILE [-posr 0]");
 	CLIArgStr ca_scanfile("scan", "");
@@ -175,7 +186,7 @@ int main(int argc, char **argv)
 	if (!ca_romfile.get().empty())
 		return patchFile(
 			ca_romfile.get(), ca_binfile.get(),
-			ca_rompos.get(), ca_binpos.get());
+			ca_rompos.get(), ca_binpos.get(), ca_force.get());
 
 	LOG("Nothing to do. Check inputs.");
 	return 1;

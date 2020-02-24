@@ -14,12 +14,17 @@ CLIArg::CLIArg(CONSTSTR prefix, CLIArgType type) :
 
 void CLIArg::parseArgs(int argc, char **argv)
 {
-	for (int i = 0; i < argc - 1; ++i) {
+	for (int i = 0; i < argc; ++i) {
 		for (CLIArg *a : g_args) {
 			if (a->m_prefix != argv[i])
 				continue;
 
-			if (a->parse(argv[i + 1]))
+			if (a->getType() == CLIARG_FLAG) {
+				a->parse(nullptr);
+				break;
+			}
+
+			if (i + 1 < argc && a->parse(argv[i + 1]))
 				++i;
 			else
 				std::cout << "Cannot parse argument '" << argv[i] << "'" << std::endl;

@@ -7,6 +7,7 @@
 
 enum CLIArgType {
 	CLIARG_NONE,
+	CLIARG_FLAG,
 	CLIARG_S64,
 	CLIARG_STR
 };
@@ -28,6 +29,16 @@ protected:
 };
 
 // Various data types
+
+class CLIArgFlag : public CLIArg {
+public:
+	CLIArgFlag(CONSTSTR prefix) :
+		CLIArg(prefix, CLIARG_FLAG) {}
+	bool get() const { return m_value; }
+protected:
+	bool parse(const char *str) { return m_value = true; }
+	bool m_value = false;
+};
 
 class CLIArgS64 : public CLIArg {
 public:
