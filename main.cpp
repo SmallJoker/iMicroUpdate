@@ -81,7 +81,31 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 	return true;
 }
 
-int scanFile(const std::string &filename, int64_t pos)
+int extractFile(CONSTSTR rompath, int64_t pos, CONSTSTR binpath)
+{
+	std::ifstream romfile(rompath, std::ios_base::binary);
+	CHECK(romfile.is_open(), "ROM: File not found");
+
+	romfile.seekg(pos);
+	MicrocodeInfo info;
+	CHECK(readMicrocode(&romfile, &info), "ROM: No microcode at pos 0x" << romfile.tellg());
+
+	info.printHeader();
+	info.dump();
+	std::ofstream binfile(binpath, std::ios_base::binary | std::ios_base::trunc);
+	CHECK(binfile, "BIN: Cannot create & open file.");
+
+	char *data = new char[info.size];
+	romfile.read(data, info.size);
+	binfile.write(data, info.size);
+	delete[] data;
+	binfile.flush();
+
+	LOG("Saved to '" << binpath << "'");
+	return 0;
+}
+
+int scanFile(CONSTSTR filename, int64_t pos)
 {
 	std::ifstream romfile(filename, std::ios_base::binary | std::ios_base::ate);
 	CHECK(romfile.is_open(), "ROM: File not found");
@@ -168,24 +192,32 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath,
 int main(int argc, char **argv)
 {
 	LOG("iMicroUpdate - Updater tool for Intel CPU microcode in BIOSes");
-	LOG("  Patch: -patch ROMFILE -bin MICROCODE -posp 0 [-posb 0] [-force]");
-	CLIArgStr ca_romfile("patch", "ROMFILE.ROM");
+	LOG("  Patch:   -patch ROMFILE -bin MICROCODE -posr 0 [-posb 0] [-force]");
+	CLIArgStr ca_patchfile("patch", "ROMFILE.ROM");
 	CLIArgStr ca_binfile("bin", "MICROCODE.BIN");
-	CLIArgS64 ca_rompos("posp", 0);
+	CLIArgS64 ca_rompos("posr", 0);
 	CLIArgS64 ca_binpos("posb", 0);
 	CLIArgFlag ca_force("force");
 
-	LOG("  Scan:  -scan FILE [-posr 0]");
+	LOG("  Scan:    -scan FILE [-posr 0]");
 	CLIArgStr ca_scanfile("scan", "");
 	CLIArg::parseArgs(argc, argv);
+
+	LOG("  Extract: -extract ROMFILE -bin DESTINATION [-posr 0]");
+	CLIArgStr ca_extractfile("extract", "");
+	CLIArg::parseArgs(argc, argv);
 	LOG("");
+
+	if (!ca_extractfile.get().empty())
+		return extractFile(ca_extractfile.get(), ca_rompos.get(),
+			ca_binfile.get());
 
 	if (!ca_scanfile.get().empty())
 		return scanFile(ca_scanfile.get(), ca_rompos.get());
 
-	if (!ca_romfile.get().empty())
+	if (!ca_patchfile.get().empty())
 		return patchFile(
-			ca_romfile.get(), ca_binfile.get(),
+			ca_patchfile.get(), ca_binfile.get(),
 			ca_rompos.get(), ca_binpos.get(), ca_force.get());
 
 	LOG("Nothing to do. Check inputs.");

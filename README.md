@@ -8,7 +8,7 @@ License: MIT
 
 	$ ./iMicroUpdate -patch MYROM.ROM -bin 9110676.BIN -posp 0x23830
 	iMicroUpdate - Microcode updater for Intel BIOSes
-	  Patch: -patch ROMFILE -bin MICROCODE -posp 0 [-posb 0]
+	  Patch: -patch ROMFILE -bin MICROCODE -posr 0 [-posb 0]
 	  Scan:  -scan FILE [-posr 0]
 	
 		ROM file:   MYROM.ROM
@@ -27,8 +27,10 @@ License: MIT
 ### Features
 
 - Scan ROM files (`-scan FILE`)
+- Extract microcodes (`-extract`)
 - Replace microcodes (`-patch`)
 - Cross-platform application
+- Script-friendly return code
 
 Microcodes can be found here: [CPUMicrocode](https://github.com/platomav/CPUMicrocodes/)
 
