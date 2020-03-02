@@ -165,6 +165,7 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath,
 	// Verify data lengths
 	CHECK(bin_size - binpos >= new_uc.size, "BIN: Invalid file length");
 	CHECK(romfile.tellg() == rompos, "Sanity check failed");
+	bin_size = new_uc.size;
 
 	LOG("\nOld vs new microcode:");
 	old_uc.printHeader();
