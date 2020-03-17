@@ -2,7 +2,7 @@
 
 A tool to brick your BIOS less easily.
 This is an experimental application that is capable of replacing Intel microcodes in BIOS ROM files.
-It is intended to be a replacement for manual copy & paste and `dd`.
+It is intended to be a replacement for manual copy & paste in hex editors.
 
 License: MIT
 
@@ -68,3 +68,5 @@ See also: [CPUMicrocode](https://github.com/platomav/CPUMicrocodes/) (microcode 
 - AMI BIOS: Altered count of microcodes
 	- Example: 3 `0xC00+0x800+0xC00` to 1 `0x2000`
 	- Needs use of `-force` if regions get split
+- Phoenix BIOS (`_C00.PEI): Altered count of microcodes
+	- Use PhoenixTool (primary for SLIC) to extract & rebuild the `*.wph` file
