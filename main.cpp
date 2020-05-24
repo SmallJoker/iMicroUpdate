@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <cstring> // memset
 
 #define LOG(msg) \
 	std::cout << msg << std::endl;
@@ -30,6 +31,14 @@ struct MicrocodeInfo {
 	{
 		printf(" %5X | %02X | %3X | 0x%05lX | 0x%04X\n",
 			cpuid, platform, revision, pos, size);
+	}
+
+	void toFileName(std::string &file)
+	{
+		file.resize(256);
+		int len = snprintf(&file[0], file.size(), "cpu%5X_plat%02X_rev%04X.bin",
+			cpuid, platform, revision);
+		file.resize(len);
 	}
 };
 
@@ -81,7 +90,7 @@ bool readMicrocode(std::istream *file, MicrocodeInfo *info = nullptr)
 	return true;
 }
 
-int extractFile(CONSTSTR rompath, int64_t pos, CONSTSTR binpath)
+int extractFile(CONSTSTR rompath, int64_t pos, std::string binpath)
 {
 	std::ifstream romfile(rompath, std::ios_base::binary);
 	CHECK(romfile.is_open(), "ROM: File not found");
@@ -92,6 +101,10 @@ int extractFile(CONSTSTR rompath, int64_t pos, CONSTSTR binpath)
 
 	info.printHeader();
 	info.dump();
+
+	if (binpath.empty()) // Generate one
+		info.toFileName(binpath);
+
 	std::ofstream binfile(binpath, std::ios_base::binary | std::ios_base::trunc);
 	CHECK(binfile, "BIN: Cannot create & open file.");
 
@@ -113,7 +126,7 @@ int scanFile(CONSTSTR filename, int64_t pos)
 	int64_t bin_size = romfile.tellg();
 	char peek;
 	MicrocodeInfo info;
-	int64_t last_pos = 0;
+	int64_t pos_end = 0;
 
 	info.printHeader();
 	while (pos < bin_size) {
@@ -122,18 +135,23 @@ int scanFile(CONSTSTR filename, int64_t pos)
 		romfile.unget();
 
 		if (peek == 0x01 && readMicrocode(&romfile, &info)) {
-			if (pos != last_pos) {
+			if (pos != pos_end) {
 				printf("\tUnknown region: 0x%lX to 0x%lX (0x%lX bytes)\n",
-					last_pos, pos - 1, pos - last_pos);
+					pos_end, pos - 1, pos - pos_end);
 			}
 			info.dump();
 			pos += (int64_t)info.size;
-			last_pos = pos;
+			pos_end = pos;
 		} else {
-			// Speed optimization
-			pos += last_pos > 0 ? 0x100 : 0x04;
+			// Speed optimization. Gaps are usually multiples of 256 bytes
+			pos += pos_end > 0 ? 0x100 : 0x04;
 		}
 	}
+	if (pos_end != bin_size)
+		printf("\tUnknown region: 0x%lX to 0x%lX (0x%lX bytes) [EOF]\n",
+					pos_end, pos - 1, pos - pos_end);
+	else
+		printf("\tNo unknown region [EOF]\n");
 	return 0;
 }
 
@@ -172,7 +190,7 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath,
 	if (microcode_ok)
 		old_uc.dump();
 	else
-		LOG("  -- NONE OR INVALID MICROCODE --");
+		LOG("  -- NONE OR INVALID MICROCODE --"); // Forced
 
 	new_uc.dump();
 	LOG("Please ENTER to confirm.");
@@ -190,24 +208,64 @@ int patchFile(CONSTSTR rompath, CONSTSTR binpath,
 	return 0;
 }
 
+int eraseFile(CONSTSTR rompath, int64_t pos, int64_t fill)
+{
+	CHECK(fill >= 0 && fill <= 0xFF, "Fill byte is out of range");
+
+	std::fstream romfile(rompath,
+		std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+	CHECK(romfile.is_open(), "ROM: File not found");
+
+	// Move to write position
+	romfile.seekg(pos);
+
+	// Read and check microcodes
+	MicrocodeInfo old_uc;
+	bool microcode_ok = readMicrocode(&romfile, &old_uc);
+	CHECK(microcode_ok, "ROM: No microcode at pos 0x" << romfile.tellg());
+
+	LOG("\nMicrocode to remove:");
+	old_uc.printHeader();
+	old_uc.dump();
+
+	LOG("Please ENTER to confirm.");
+	getchar();
+
+	char *buffer = new char[old_uc.size];
+	memset(buffer, (uint8_t)fill, old_uc.size);
+	romfile.write(buffer, old_uc.size);
+	delete[] buffer;
+
+	romfile.close();
+
+	LOG("DONE. Removed microcode.");
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	LOG("iMicroUpdate - Updater tool for Intel CPU microcode in BIOSes");
-	LOG("  Patch:   -patch ROMFILE -bin MICROCODE -posr 0 [-posb 0] [-force]");
-	CLIArgStr ca_patchfile("patch", "ROMFILE.ROM");
-	CLIArgStr ca_binfile("bin", "MICROCODE.BIN");
+	LOG("");
+
+	// Scan
+	CLIArgStr ca_scanfile("scan", "");
+	CLIArg::parseArgs(argc, argv);
+
+	// Extract
+	CLIArgStr ca_extractfile("extract", "");
+	CLIArg::parseArgs(argc, argv);
+
+	// Patch
+	CLIArgStr ca_patchfile("patch", "");
+	CLIArgStr ca_binfile("bin", "");
 	CLIArgS64 ca_rompos("posr", 0);
 	CLIArgS64 ca_binpos("posb", 0);
 	CLIArgFlag ca_force("force");
 
-	LOG("  Scan:    -scan FILE [-posr 0]");
-	CLIArgStr ca_scanfile("scan", "");
+	// Erase
+	CLIArgStr ca_erasefile("erase", "");
+	CLIArgS64 ca_fill("fill", 0);
 	CLIArg::parseArgs(argc, argv);
-
-	LOG("  Extract: -extract ROMFILE -bin DESTINATION [-posr 0]");
-	CLIArgStr ca_extractfile("extract", "");
-	CLIArg::parseArgs(argc, argv);
-	LOG("");
 
 	if (!ca_extractfile.get().empty())
 		return extractFile(ca_extractfile.get(), ca_rompos.get(),
@@ -221,6 +279,14 @@ int main(int argc, char **argv)
 			ca_patchfile.get(), ca_binfile.get(),
 			ca_rompos.get(), ca_binpos.get(), ca_force.get());
 
-	LOG("Nothing to do. Check inputs.");
+	if (!ca_erasefile.get().empty())
+		return eraseFile(ca_erasefile.get(), ca_rompos.get(),
+			ca_fill.get());
+
+	LOG("  Scan:    -scan FILE [-posr 0]");
+	LOG("  Extract: -extract ROMFILE [-bin DESTINATION] [-posr 0]");
+	LOG("  Patch:   -patch ROMFILE -bin MICROCODE -posr 0 [-posb 0] [-force]");
+	LOG("  Erase:   -erase ROMFILE [-posr 0] [-fill 0]");
+	LOG("");
 	return 1;
 }

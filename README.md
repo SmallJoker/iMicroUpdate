@@ -32,13 +32,16 @@ It is also possible to use another ROM as microcode source:
 
 	-patch MYROM.ROM -posr 0x23830 -bin IntelAll.BIN -posb 0x32000
 
+In case the microcode sizes mismatch or no microcode is found in the ROM file (gap?),
+then consider using `-force`.
+
+WARNING: Ensure there is enough space else it will overwrite adjacent microcodes!
+
+	-patch MYROM.ROM -posr 0x23830 -bin new10676.bin -posb 0x32000 -force
+
 **Example:**
 
 	$ ./iMicroUpdate -patch MYROM.ROM -bin 9110676.BIN -posr 0x23830
-	iMicroUpdate - Microcode updater for Intel BIOSes
-	  Patch:   -patch ROMFILE -bin MICROCODE -posr 0 [-posb 0]
-	  Scan:    -scan FILE [-posr 0]
-	  Extract: -extract ROMFILE -bin DESTINATION [-posr 0]
 	
 		ROM file:   MYROM.ROM
 		Microcode:  9110676.BIN
@@ -51,6 +54,16 @@ It is also possible to use another ROM as microcode source:
 	Please ENTER to confirm.
 	
 	DONE. Patched.
+
+
+### Erase microcode
+
+Replace a microcode with a gap. This command is helpful to free space to
+insert larger microcodes. Consider `-erase` prior `-patch ... -force`.
+
+	-erase MYROM.ROM -posr 0x23830 -fill 0x00
+
+The gap is usually filled with `0x00` (AMI BIOS).
 
 
 ## Features
